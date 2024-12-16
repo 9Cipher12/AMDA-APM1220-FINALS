@@ -1,0 +1,399 @@
+---
+title: 'SA2: Applied Multivariate Data Analysis'
+author: "Cristel Kaye Billones"
+output: pdf_document
+---
+
+# Problem 1
+
+## Evaluating Rehabilitation Programs
+**Scenario:**  A hospital wants to assess the effectiveness of three rehabilitation programs (Group A, Group B, and Group C) on improving patients’ physical and psychological well-being.
+
+```{r message=FALSE, warning=FALSE}
+# Load necessary libraries
+library(readr)
+library(car)
+library(MVN)
+library(dplyr)
+library(ggplot2)
+library(dplyr)
+library(biotools)
+```
+
+```{r}
+# Load the data
+file_path <- "C:/Users/Cipher/Desktop/AMDA/rehab_data.csv"
+df <- read_csv(file_path)
+head(df)
+```
+\newpage
+**1. Check Assumptions. MANOVA makes the following assumptions about the data:**
+
+- **a. Adequate sample size**
+
+```{r}
+cat("Sample size:", nrow(df), "observations.\n")
+cat("Groups:", table(df$program), "\n")
+```
+The dataset contains 90 observations, with each of the three groups (Program A, B, and C) having 30 observations. This sample size is generally sufficient for MANOVA as it ensures reasonable power for detecting effects.
+
+- **b. Independence of observations**
+
+The independence of observations assumption is considered met as it is based on the experimental design. It assumes that the observations are independent of each other, which would have been ensured during data collection.
+
+- **c. Absence of univariate outliers**
+
+```{r}
+boxplot(df$physical_health ~ df$program, main = "Physical Health by Program")
+boxplot(df$psychological_wellbeing ~ df$program, main = "Psychological Well-being by Program")
+# Check for univariate outliers - Physical Health and Psychological Well-being
+
+# Summary statistics for physical_health by program
+summary_physical_health <- df %>%
+  group_by(program) %>%
+  summarise(
+    Min = min(physical_health, na.rm = TRUE),
+    Q1 = quantile(physical_health, 0.25, na.rm = TRUE),
+    Median = median(physical_health, na.rm = TRUE),
+    Mean = mean(physical_health, na.rm = TRUE),
+    Q3 = quantile(physical_health, 0.75, na.rm = TRUE),
+    Max = max(physical_health, na.rm = TRUE),
+    SD = sd(physical_health, na.rm = TRUE)
+  )
+print(summary_physical_health)
+
+# Summary statistics for psychological_wellbeing by program
+summary_psychological_wellbeing <- df %>%
+  group_by(program) %>%
+  summarise(
+    Min = min(psychological_wellbeing, na.rm = TRUE),
+    Q1 = quantile(psychological_wellbeing, 0.25, na.rm = TRUE),
+    Median = median(psychological_wellbeing, na.rm = TRUE),
+    Mean = mean(psychological_wellbeing, na.rm = TRUE),
+    Q3 = quantile(psychological_wellbeing, 0.75, na.rm = TRUE),
+    Max = max(psychological_wellbeing, na.rm = TRUE),
+    SD = sd(psychological_wellbeing, na.rm = TRUE)
+  )
+print(summary_psychological_wellbeing)
+
+# Boxplots to visualize univariate outliers
+boxplot(df$physical_health ~ df$program, main = "Physical Health by Program")
+boxplot(df$psychological_wellbeing ~ df$program, main = "Psychological Well-being by Program")
+
+```
+
+\vspace{5mm}
+**Physical Health by Program:** Summary statistics show varying distributions across the programs, with Program C having the highest mean (80.4) and Program A having the lowest mean (69.5).
+
+   - **Outliers:** The boxplots for physical_health and psychological_wellbeing reveal that none of the groups exhibit extreme outliers, although there are some values near the upper quartile.
+   
+**Psychological Well-being by Program:** The mean for Program C is the highest (73.5), and Program A has the lowest mean (64.3).
+
+   - **Outliers:** Similar to physical_health, the boxplots show no severe outliers, though certain values are relatively high compared to the interquartile range.
+   
+\newpage
+
+- **d. Absence of multivariate outliers**
+
+```{r}
+mahal <- mahalanobis(df[, c("physical_health", "psychological_wellbeing")], 
+                     colMeans(df[, c("physical_health", "psychological_wellbeing")]), 
+                     cov(df[, c("physical_health", "psychological_wellbeing")]))
+cutoff <- qchisq(0.99, df = 2) # Degrees of freedom = number of dependent variables
+outliers <- which(mahal > cutoff)
+cat("Multivariate outliers (Mahalanobis):", outliers, "\n")
+```
+**Mahalanobis Distance:** A multivariate outlier was detected at observation 74, which exceeds the cutoff value (cutoff = 9.21 based on X² distribution for 2 degrees of freedom). This observation should be examined for potential errors or considered for exclusion if deemed influential.
+
+- **e. Multivariate Normality**
+
+```{r}
+mvn_test <- mvn(data = df[, c("physical_health", "psychological_wellbeing")], mvnTest = "mardia")
+print(mvn_test)
+```
+
+**Mardia's Test Results**
+
+- **Skewness:**  
+  The skewness statistic for *physical_health* and *psychological_wellbeing* indicates a significant departure from normality (p = 0.0358), suggesting non-normality in the data.
+
+- **Kurtosis:**  
+  The kurtosis for *physical_health* is not significantly different from normal, but for *psychological_wellbeing*, it is slightly significant (p = 0.2548), indicating normality in terms of kurtosis.
+
+- **Univariate Normality:**  
+  Both variables (*physical_health* and *psychological_wellbeing*) pass the Anderson-Darling test (p > 0.05), indicating that they are approximately univariately normal.
+  
+  
+\newpage
+
+- **f. Linearity**
+
+```{r message=FALSE, warning=FALSE}
+# 1. Pearson Correlation Coefficient
+correlation <- cor(df$physical_health, df$psychological_wellbeing)
+cat("Pearson Correlation Coefficient: ", correlation, "\n")
+
+# 2. Linear Regression Model
+lm_model <- lm(psychological_wellbeing ~ physical_health, data = df)
+summary(lm_model)  # This will give you the coefficients, R-squared, and p-value
+
+# 3. Plotting the data and the linear regression line
+plot(df$physical_health, df$psychological_wellbeing, 
+     main = "Physical Health vs. Psychological Well-being", 
+     xlab = "Physical Health", 
+     ylab = "Psychological Well-being")
+abline(lm_model, col = "red")  # Adds a red line representing the linear model
+
+# 4. Residual Plot
+plot(lm_model$residuals, 
+     main = "Residuals Plot", 
+     xlab = "Fitted Values", 
+     ylab = "Residuals")
+abline(h = 0, col = "red")
+```
+**Pearson Correlation Coefficient:**
+
+The Pearson correlation coefficient is **0.146**, indicating a very weak positive linear relationship between **physical_health** and **psychological_wellbeing**. The closer the value is to 1, the stronger the linear relationship, but this value suggests that **physical_health** and **psychological_wellbeing** are only weakly related, if at all.
+
+**Linear Regression Model:**
+
+- **Intercept (58.87)**: This is the estimated value of **psychological_wellbeing** when **physical_health** is zero.
+- **Slope (0.12)**: For each unit increase in **physical_health**, **psychological_wellbeing** is expected to increase by **0.12 units**, though the effect is small.
+- **p-value for physical_health (0.17)**: This is greater than the standard significance level of **0.05**, suggesting that the slope is not statistically significant, i.e., **physical_health** does not have a statistically significant effect on **psychological_wellbeing**.
+
+**R-squared:**
+
+**R-squared (0.02133)**: This indicates that only about **2.1%** of the variance in **psychological_wellbeing** is explained by **physical_health**. This is very low, meaning that the model does not explain much of the variation in the dependent variable.
+
+**F-statistic (1.918) and p-value (0.1696):**
+
+The **F-statistic** is a test for the overall significance of the model, and the **p-value of 0.1696** indicates that the model as a whole is not statistically significant at the **0.05** level.
+\newpage
+**Conclusion:**
+
+The weak correlation and lack of statistical significance in the regression analysis suggest that there is little to no linear relationship between **physical_health** and **psychological_wellbeing** in this dataset. The variables do not appear to be strongly related, and a linear model is not a good fit for explaining the relationship between them.
+
+\vspace{5mm}
+- **g. Homogeneity of Variances (Levene’s Test):**
+```{r message=FALSE, warning=FALSE}
+leveneTest(df$physical_health ~ df$program)
+leveneTest(df$psychological_wellbeing ~ df$program)
+```
+
+**Physical Health:** Levene's test for physical_health yields a p-value of 0.3689, which is greater than 0.05, indicating that the assumption of homogeneity of variances is met.
+
+**Psychological Well-being:** Levene's test for psychological_wellbeing yields a p-value of 0.1981, which is also greater than 0.05, suggesting that the variances are homogeneous.
+\vspace{5mm}
+
+- **h. Homogeneity of variance-covariance matrices (Box's M test)**
+
+```{r}
+boxM <- boxM(df[, c("physical_health", "psychological_wellbeing")], df$program)
+print(boxM)
+```
+**Box’s M Test:** The result of the Box’s M test for physical_health and psychological_wellbeing shows a p-value of 0.3495, which is greater than 0.05, indicating that the assumption of homogeneity of variance-covariance matrices is satisfied.
+
+\newpage
+### Summary of Assumption Check
+
+- The sample size, independence of observations, and homogeneity of variances and covariance matrices are met.
+
+- Univariate normality is largely met, though there is some evidence of multivariate non-normality (specifically skewness for *physical_health*).
+
+- The presence of multivariate outliers requires attention, particularly observation 74.
+
+- The linearity assumption appears reasonably satisfied based on scatterplot inspection.
+
+- Given these results, while there are some minor violations (e.g., multivariate non-normality), the assumptions for MANOVA are largely satisfied, and the analysis can proceed.
+
+\vspace{5mm}
+**2. Fit MANOVA model using Pillai's test.**
+\vspace{5mm}
+
+```{r}
+# Fit MANOVA model using Pillai's test
+manova_model <- manova(cbind(physical_health, psychological_wellbeing) ~ program, data = df)
+
+# Summary of the MANOVA model with Pillai's test
+summary(manova_model, test = "Pillai")
+```
+\vspace{5mm}
+### MANOVA Results
+
+- **Pillai's Trace:**  
+  The Pillai's statistic is 0.28046, which measures the multivariate effect of the grouping variable (*program*) on the dependent variables.
+
+- **Approximate F:**  
+  The F-value is 7.0948, which represents the variation between the groups compared to the variation within groups.
+
+- **Degrees of Freedom:**  
+  The numerator degrees of freedom (*num Df*) is 4, and the denominator degrees of freedom (*den Df*) is 174.
+
+- **p-value:**  
+  The p-value is very small (2.582e-05), which is highly significant and indicates that the differences between the groups (*programs*) in terms of *physical_health* and *psychological_wellbeing* are statistically significant.
+
+### Conclusion:
+Since the p-value is less than the typical significance threshold of 0.05, we reject the null hypothesis and conclude that there are significant differences in *physical_health* and *psychological_wellbeing* across the different programs (A, B, and C).
+
+\newpage
+**3. If applicable, perform ANOVA for each dependent variable and Tukey's HSD for pairwise group comparisons.**
+
+```{r}
+# a. ANOVA for physical_health
+anova_physical_health <- aov(physical_health ~ program, data = df)
+summary(anova_physical_health)
+
+# b. ANOVA for psychological_wellbeing
+anova_psychological_wellbeing <- aov(psychological_wellbeing ~ program, data = df)
+summary(anova_psychological_wellbeing)
+
+# c. Tukey's HSD for pairwise comparisons for physical_health if ANOVA is significant
+if (summary(anova_physical_health)[[1]]$`Pr(>F)`[1] < 0.05) {
+  tukey_physical_health <- TukeyHSD(anova_physical_health)
+  print(tukey_physical_health)
+}
+
+# d. Tukey's HSD for pairwise comparisons for psychological_wellbeing if ANOVA is significant
+if (summary(anova_psychological_wellbeing)[[1]]$`Pr(>F)`[1] < 0.05) {
+  tukey_psychological_wellbeing <- TukeyHSD(anova_psychological_wellbeing)
+  print(tukey_psychological_wellbeing)
+}
+```
+
+
+**Analysis**
+
+### ANOVA for *physical_health*:
+- **p-value:** 0.000912 (< 0.05), which indicates that there are significant differences in *physical_health* across the groups (*program*).
+- **Interpretation:** The null hypothesis is rejected, meaning at least one group differs in *physical_health* scores from the others.
+
+### ANOVA for *psychological_wellbeing*:
+- **p-value:** 0.000388 (< 0.05), which indicates significant differences in *psychological_wellbeing* across the groups (*program*).
+- **Interpretation:** The null hypothesis is rejected, meaning at least one group differs in *psychological_wellbeing* scores from the others.
+
+### Tukey's HSD for *physical_health*:
+- **Program B vs Program A:** The difference is 7.61, with a p-value of 0.0246082, indicating a significant difference between these two groups.
+- **Program C vs Program A:** The difference is 10.84, with a p-value of 0.0007889, indicating a significant difference between these two groups.
+- **Program C vs Program B:** The difference is 3.23, but with a p-value of 0.4986211, which is not significant, indicating no significant difference between these two groups.
+
+### Tukey's HSD for *psychological_wellbeing*:
+- **Program B vs Program A:** The difference is 2.10, with a p-value of 0.6462114, indicating no significant difference between these two groups.
+- **Program C vs Program A:** The difference is 9.29, with a p-value of 0.0004528, indicating a significant difference between these two groups.
+- **Program C vs Program B:** The difference is 7.19, with a p-value of 0.0081378, indicating a significant difference between these two groups.
+
+### Conclusion:
+- For *physical_health*, there are significant differences between Program A and Program B and between Program A and Program C, but no significant difference between Program B and Program C.
+- For *psychological_wellbeing*, there are significant differences between Program A and Program C and between Program B and Program C, but no significant difference between Program A and Program B.
+- These findings suggest that the programs significantly affect *physical_health* and *psychological_wellbeing*, but the patterns of differences vary between the two dependent variables.
+
+\newpage
+**4. Visualize the following: Boxplots of scores by program, Scatter plot of physical vs. psychological scores, grouped by program.**
+
+```{r}
+# a. Boxplot for physical_health by program
+ggplot(df, aes(x = program, y = physical_health, fill = program)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Physical Health Scores by Program",
+       x = "Program", y = "Physical Health") +
+  theme_minimal()
+
+# b. Boxplot for psychological_wellbeing by program
+ggplot(df, aes(x = program, y = psychological_wellbeing, fill = program)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Psychological Wellbeing Scores by Program",
+       x = "Program", y = "Psychological Wellbeing") +
+  theme_minimal()
+
+# c. Scatter plot of physical_health vs. psychological_wellbeing by program
+ggplot(df, aes(x = physical_health, y = psychological_wellbeing, color = program)) +
+  geom_point() +
+  labs(title = "Scatter Plot of Physical vs. Psychological Scores by Program",
+       x = "Physical Health", y = "Psychological Wellbeing") +
+  theme_minimal()
+
+# Statistics summary for physical_health by program
+summary_physical_health <- df %>%
+  group_by(program) %>%
+  summarise(
+    Mean = mean(physical_health, na.rm = TRUE),
+    Median = median(physical_health, na.rm = TRUE),
+    SD = sd(physical_health, na.rm = TRUE),
+    Min = min(physical_health, na.rm = TRUE),
+    Max = max(physical_health, na.rm = TRUE)
+  )
+print(summary_physical_health)
+
+# Statistics summary for psychological_wellbeing by program
+summary_psychological_wellbeing <- df %>%
+  group_by(program) %>%
+  summarise(
+    Mean = mean(psychological_wellbeing, na.rm = TRUE),
+    Median = median(psychological_wellbeing, na.rm = TRUE),
+    SD = sd(psychological_wellbeing, na.rm = TRUE),
+    Min = min(psychological_wellbeing, na.rm = TRUE),
+    Max = max(psychological_wellbeing, na.rm = TRUE)
+  )
+print(summary_psychological_wellbeing)
+```
+
+**Analysis of Summary Statistics**
+
+### Physical Health by Program:
+
+#### Program A:
+- **Mean:** 69.5
+- **Median:** 69.3
+- **Standard Deviation (SD):** 9.81
+- **Range:** Min = 50.3, Max = 87.9
+
+Program A has moderate variation in physical health scores, with values typically ranging between 50.3 and 87.9.
+
+#### Program B:
+- **Mean:** 77.1
+- **Median:** 75.6
+- **Standard Deviation (SD):** 10.0
+- **Range:** Min = 56.4, Max = 101.0
+
+Program B shows a higher mean and median than Program A, suggesting better physical health outcomes on average. The spread of values is also wider, with scores reaching up to 101.
+
+#### Program C:
+- **Mean:** 80.4
+- **Median:** 80.4
+- **Standard Deviation (SD):** 13.0
+- **Range:** Min = 45.4, Max = 111.0
+
+Program C has the highest mean, median, and variability, with scores extending from 45.4 to 111. The higher standard deviation indicates greater diversity in physical health scores within this program.
+
+### Psychological Wellbeing by Program:
+
+#### Program A:
+- **Mean:** 64.3
+- **Median:** 63.1
+- **Standard Deviation (SD):** 7.25
+- **Range:** Min = 51.7, Max = 82.5
+
+Psychological wellbeing scores in Program A are relatively concentrated around the mean, with a smaller spread compared to physical health. The scores range from 51.7 to 82.5.
+
+#### Program B:
+- **Mean:** 66.3
+- **Median:** 65.7
+- **Standard Deviation (SD):** 10.3
+- **Range:** Min = 49.5, Max = 86.9
+
+Program B shows a slightly higher mean and median compared to Program A, with a similar range, but with a slightly larger standard deviation, indicating more variability in psychological wellbeing scores.
+
+#### Program C:
+- **Mean:** 73.5
+- **Median:** 72.5
+- **Standard Deviation (SD):** 9.42
+- **Range:** Min = 59.4, Max = 104.0
+
+Program C exhibits the highest mean and median for psychological wellbeing, similar to Program B for physical health. The higher mean suggests better psychological wellbeing, with scores ranging from 59.4 to 104.
+
+### Key Insights:
+- **Physical Health:** Program C consistently shows the highest mean scores, followed by Program B and Program A, indicating a progressive improvement in physical health outcomes across the programs.
+- **Psychological Wellbeing:** Program C also exhibits the highest mean and median in psychological wellbeing, suggesting it has the most favorable psychological outcomes, followed by Program B and Program A.
+- **Variability:** The standard deviations in both variables are highest in Program C, indicating that there is greater diversity in the scores, while Program A tends to have the least variability in both physical health and psychological wellbeing.
+
+### Conclusion:
+Programs B and C appear to have better outcomes than Program A, especially in terms of physical health and psychological wellbeing, although Program C has more variability in the scores.
